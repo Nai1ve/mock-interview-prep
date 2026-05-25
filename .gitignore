@@ -1,0 +1,15 @@
+# User-specific files
+*.docx
+notes/
+private/
+.work/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*.swo
