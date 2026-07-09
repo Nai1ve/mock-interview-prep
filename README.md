@@ -99,5 +99,5 @@ mock-interview-prep/
 
 ## Acknowledgements
 
-- The "JD + resume → targeted questions" framing borrows from the `GPTInterviewer` family of tools, extended with probability tiers + scoring loop.
-- The "real experience as a library" truth-preservation principle comes from the companion `docx-resume-tailor` skill.
+- The "JD + resume → targeted questions" framing borrows from [GPTInterviewer](https://github.com/jiatastic/GPTInterviewer), extended with probability tiers + scoring loop.
+- The "real experience as a library" truth-preservation principle comes from the companion [docx-resume-tailor](https://github.com/lazzyasscoder-hub/docx-resume-tailor) skill (by same author).
