@@ -1,5 +1,3 @@
 # Examples
 
-This directory contains sample outputs demonstrating the skill's 5-step flow end-to-end.
-
-- [`sample-session.md`](./sample-session.md) — A complete interview prep session for a fictional role. Shows JD summary, question prediction with probability tiers, per-question STAR talking points, risk-point defense, and reverse questions.
+[sample-session.md](sample-session.md) is a fictional scenario illustrating planning, adaptive depth, private process records, and final review. It contains no real resume or interview records. It is not a bank of employer-specific interview questions.

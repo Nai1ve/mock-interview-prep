@@ -13,3 +13,8 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Private mock-interview records and Python cache
+interview-records/
+__pycache__/
+*.pyc
