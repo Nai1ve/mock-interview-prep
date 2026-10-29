@@ -1,6 +1,6 @@
 # Time and stage planning
 
-Choose modules from the role and stage, not company stereotypes. These are starting allocations, not quotas:
+Choose modules from today's explicit practice focus first, then the role and stage. These allocations never expand a focused session to the whole JD. Do not use company stereotypes. These are starting allocations, not quotas:
 
 | Stage | Suggested assessment allocation |
 |---|---|

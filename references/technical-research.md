@@ -11,3 +11,7 @@ For each used source persist a source event containing id, query, title, URL, re
 During simulation, search narrowly when answer correctness is uncertain or a version boundary matters. Do not reveal the resulting answer to the candidate before the branch closes. Research/bookkeeping does not consume the default active-interview budget. For strict wall-clock mode, the deadline remains in force. Record inaccessible/conflicting evidence and defer judgment if needed.
 
 Before finalizing a reference answer, verify material current/version-sensitive claims and attach source links near the relevant answer. Stable knowledge may be used without claiming it was newly researched. If tools/network fail, mark current verification unavailable, avoid unsupported “latest” claims, and continue on stable questions if appropriate. Ask the user for configuration only if they explicitly require a search provider unavailable in this environment.
+
+## Research must inform selection
+
+For new-schema records every source has `phase`: preparation, live, or review. Search before question selection when newer/version-sensitive topics matter, building alternative probes tied to the current focus and actual technology claims. If no live search was possible, record the limitation in `preparation_research` and do not imply newest-topic coverage. Sources collected only after finish are review verification. They cannot retroactively justify pre-interview research or meaningful coverage of an unasked topic.

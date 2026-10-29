@@ -19,3 +19,7 @@ Prioritize JD-critical capabilities, claimed expertise, consequential metrics an
 Aim for representative coverage of important projects, roles and skills within time, not exhaustive questioning of each bullet. If the budget cannot sample all high-priority domains, disclose the trade-off in the opening plan and record exclusions. Distinguish “not asked”, “candidate says no experience”, and “answered incorrectly”.
 
 Each main question records at least one claim ID or JD requirement, plus domain, question type, intended evidence and time allowance. Follow-ups inherit this context but may add a domain. A question crossing domains demonstrates coverage only for the aspects actually tested.
+
+## Session scope and granular IDs
+
+Filter relevance through today's explicit focus before JD completeness. Register projects separately (`project_id`) and split compound skill statements into distinct claim IDs. Each claim links to its source/project; each question names its actual primary topic (`topic_id`) rather than inheriting an umbrella skill list. For hypothetical transfer questions use `evidence_kind: hypothetical`; for verified personal implementation questions use `resume_actual`. Merely naming R1 in a generic hypothetical prompt is not actual project evidence.

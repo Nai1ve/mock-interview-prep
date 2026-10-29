@@ -2,6 +2,8 @@
 
 Resume evidence: R1 claims UI development; R2 claims a 40% API latency reduction. The JD requires backend APIs, database reasoning and basic frontend delivery. The resume does not name the database or caching technology.
 
+This example is a comprehensive session. If the user instead asks for backend practice, exclude standalone UI assessment despite the full-stack JD, and use backend-plan.json as the schema example.
+
 ## Opening plan
 
 60 minutes, estimated active interview time; offline gaps/research excluded. Experience alignment 6 min, projects 24 min, foundations 15 min, scenario/debugging 15 min. About 7–10 main questions including follow-up time. Backend/data requirements receive protected coverage despite longer UI descriptions in the resume. All 60 minutes are assessment; the final review is outside this budget.

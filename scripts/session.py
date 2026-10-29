@@ -74,6 +74,7 @@ def validate_plan(plan):
             raise ValueError('each module requires domain coverage')
     if not math.isclose(sum(m['minutes'] for m in modules), total, abs_tol=0.001):
         raise ValueError('module minutes must sum to duration_minutes')
+    validate_contract(plan)
 
 
 @contextlib.contextmanager
@@ -133,13 +134,15 @@ def projection(plan, events):
     for q in questions.values():
         a = q['assessment']
         coverage.setdefault(q['domain'], []).append({'question_id': q['id'], 'status': a['status'] if a else ('partial' if q['answer'] else 'untested')})
-    return {
+    state = {
         'plan': current, 'original_plan': plan, 'event_count': len(events),
         'elapsed_minutes': elapsed, 'remaining_minutes': max(0, current['duration_minutes'] - elapsed),
         'module_minutes_used': used, 'unattributed_minutes': elapsed - sum(used.values()),
         'questions': list(questions.values()), 'pending_question_ids': [q['id'] for q in questions.values() if q['answer'] is None],
         'coverage': coverage, 'sources': list(sources.values()), 'finish': finish,
     }
+    state['selection_audit'] = selection_audit(state)
+    return state
 
 
 def require_text(event, *keys):
@@ -173,6 +176,7 @@ def validate_event(event, state):
             raise ValueError('question must link to resume claim IDs or a JD requirement')
         if event.get('parent_id') and event['parent_id'] not in qs:
             raise ValueError('unknown parent question')
+        validate_selection(event, state, elapsed)
         if elapsed >= state['plan']['duration_minutes']:
             raise ValueError('assessment budget exhausted; finish instead')
         if state['plan']['timing_mode'] == 'wall_clock':
@@ -194,10 +198,17 @@ def validate_event(event, state):
                 raise ValueError('cannot assess an unanswered question')
             if event.get('status') not in STATUSES or event['decision'] not in ('deepen', 'branch', 'move_on', 'end'):
                 raise ValueError('invalid assessment status or decision')
+            if state['plan'].get('schema_version', 1) >= 2:
+                require_text(event, 'depth_evidence', 'remaining_unknowns')
+                if event.get('observed_depth') not in DEPTHS:
+                    raise ValueError('assessment requires observed_depth')
     elif kind == 'source':
         require_text(event, 'id', 'query', 'title', 'url', 'retrieved_at', 'version', 'claim')
         if not event['url'].startswith(('https://', 'http://')) or not isinstance(event.get('verified'), bool):
             raise ValueError('source requires HTTP URL and verified boolean')
+        if state['plan'].get('schema_version', 1) >= 2:
+            if event.get('phase') not in ('preparation', 'live', 'review') or (state['finish'] and event['phase'] != 'review'):
+                raise ValueError('source phase must match preparation/live/review timing')
     elif kind == 'replan':
         require_text(event, 'reason')
         validate_plan(event.get('plan'))
@@ -205,6 +216,18 @@ def validate_event(event, state):
             raise ValueError('replan may redistribute the existing budget, not silently extend it')
         if {m['id'] for m in event['plan']['modules']} != modules:
             raise ValueError('preserve module IDs for reliable time accounting')
+        if state['plan'].get('schema_version', 1) >= 2:
+            old, new = state['plan'], event['plan']
+            if event.get('user_scope_change'):
+                require_text(event, 'user_scope_change')
+            if new.get('schema_version', 1) < 2:
+                raise ValueError('cannot downgrade a granular session')
+            if old['practice_scope'] != new['practice_scope'] and not event.get('user_scope_change'):
+                raise ValueError('scope changes require the actual user request in user_scope_change')
+            old_required = {t['id']:t for t in old['topics'] if t['required']}
+            new_topics = {t['id']:t for t in new['topics']}
+            if not event.get('user_scope_change') and any(i not in new_topics or not new_topics[i]['required'] or new_topics[i]['domain'] != t['domain'] or new_topics[i]['name'] != t['name'] or new_topics[i]['reserve_minutes'] < t['reserve_minutes'] or DEPTHS[new_topics[i]['target_depth']] < DEPTHS[t['target_depth']] for i,t in old_required.items()):
+                raise ValueError('cannot silently erase protected topics, reserves or target depth')
     elif kind == 'finish':
         require_text(event, 'reason')
 
@@ -229,6 +252,7 @@ def render_audit(state):
     rows += ['', f"Unattributed minutes: {state['unattributed_minutes']}", '', 'Domain evidence (untested is not failed):', '']
     for domain, evidence in state['coverage'].items():
         rows.append(f"- {domain}: " + (', '.join(x['question_id'] + '=' + x['status'] for x in evidence) or 'untested'))
+    rows += ['', '## Practice scope, actual project evidence and topic depth', '', '```json', json.dumps(state['selection_audit'], ensure_ascii=False, indent=2), '```']
     rows += ['', '## Question and follow-up ledger', '']
     for q in state['questions']:
         rows += [f"### {q['id']}" + (f" (follow-up to {q['parent_id']})" if q.get('parent_id') else ''), '', q['text'], '',
@@ -242,11 +266,123 @@ def render_audit(state):
     return '\n'.join(rows) + '\n'
 
 
+def validate_contract(plan):
+    if plan.get('schema_version', 1) < 2:
+        return
+    scope = plan.get('practice_scope', {})
+    require_text(scope, 'objective')
+    included, excluded = scope.get('included_domains'), scope.get('excluded_domains')
+    if not isinstance(included, list) or not included or not isinstance(excluded, list):
+        raise ValueError('scope requires included_domains and excluded_domains lists')
+    if set(included) & set(excluded):
+        raise ValueError('scope includes an excluded domain')
+    if not isinstance(plan.get('projects'), list) or not isinstance(plan.get('resume_map'), list):
+        raise ValueError('projects and resume_map lists required')
+    projects = {p['id'] for p in plan['projects']}
+    if len(projects) != len(plan['projects']):
+        raise ValueError('duplicate project ID')
+    claims = {r['claim_id'] for r in plan['resume_map']}
+    if len(claims) != len(plan['resume_map']):
+        raise ValueError('duplicate resume claim ID')
+    for r in plan['resume_map']:
+        require_text(r, 'resume_evidence')
+        if r.get('project_id') and r['project_id'] not in projects:
+            raise ValueError('unknown project in resume map')
+    topics = plan.get('topics')
+    if not isinstance(topics, list) or not topics:
+        raise ValueError('specific topics required')
+    ids, reserves = set(), 0
+    for t in topics:
+        require_text(t, 'id', 'name', 'domain', 'basis', 'target_depth')
+        if t['id'] in ids or t['domain'] not in included or t['target_depth'] not in DEPTHS:
+            raise ValueError('duplicate topic or topic outside scope/invalid depth')
+        ids.add(t['id'])
+        if not isinstance(t.get('required'), bool):
+            raise ValueError('topic required must be boolean')
+        reserve = t.get('reserve_minutes', 0)
+        if not isinstance(reserve, (int, float)) or isinstance(reserve, bool) or not math.isfinite(reserve) or reserve < 0 or (t['required'] and reserve <= 0):
+            raise ValueError('required topics need positive protected sampling minutes')
+        if t['required']:
+            reserves += reserve
+    if reserves > plan['duration_minutes']:
+        raise ValueError('protected sampling exceeds total budget')
+    require_text(plan, 'preparation_research')
+
+
+DEPTHS = {'touched': 0, 'basic': 1, 'mechanism': 2, 'boundary': 3}
+
+
+def selection_audit(state):
+    plan = state['plan']
+    if plan.get('schema_version', 1) < 2:
+        return {'legacy': True, 'note': 'No granular scope/depth contract; coarse tags are not verified topic coverage.'}
+    questions = state['questions']
+    topics = []
+    for t in plan['topics']:
+        qs = [q for q in questions if q.get('topic_id') == t['id']]
+        answered = [q for q in qs if q['answer']]
+        assessed = [q for q in answered if q['assessment']]
+        best = max((q['assessment'].get('observed_depth', 'touched') for q in assessed), key=lambda d: DEPTHS[d], default='touched')
+        topics.append({**t, 'question_ids': [q['id'] for q in qs], 'sampled': bool(answered),
+                       'observed_depth': best, 'target_depth_verified': bool(assessed) and DEPTHS[best] >= DEPTHS[t['target_depth']],
+                       'statuses': [q['assessment']['status'] for q in assessed]})
+    outstanding = [t for t in topics if t['required'] and not t['sampled']]
+    projects = []
+    for p in plan['projects']:
+        actual = [q['id'] for q in questions if q.get('project_id') == p['id'] and q.get('evidence_kind') == 'resume_actual' and q['answer']]
+        hypothetical = [q['id'] for q in questions if q.get('project_id') == p['id'] and q.get('evidence_kind') == 'hypothetical']
+        projects.append({**p, 'actual_question_ids': actual, 'hypothetical_question_ids': hypothetical})
+    warnings = []
+    untouched = [p['id'] for p in projects if p.get('priority') == 'critical' and not p['actual_question_ids']]
+    if untouched:
+        warnings.append('Important projects without actual implementation evidence: ' + ', '.join(untouched))
+    below = [t['id'] for t in topics if t['sampled'] and not t['target_depth_verified']]
+    if below:
+        warnings.append('Sampled topics still below target depth: ' + ', '.join(below))
+    return {'practice_scope': plan['practice_scope'], 'topics': topics, 'projects': projects,
+            'unsampled_required_topics': [t['id'] for t in outstanding],
+            'protected_minutes_remaining': sum(t['reserve_minutes'] for t in outstanding), 'warnings': warnings}
+
+
+def validate_selection(event, state, elapsed):
+    plan = state['plan']
+    if plan.get('schema_version', 1) < 2:
+        return
+    require_text(event, 'topic_id', 'evidence_kind', 'selection_reason')
+    topic = next((t for t in plan['topics'] if t['id'] == event['topic_id']), None)
+    if not topic or topic['domain'] != event['domain']:
+        raise ValueError('question topic/domain must match an in-scope topic')
+    if event['evidence_kind'] not in ('resume_actual', 'hypothetical', 'fundamentals'):
+        raise ValueError('invalid evidence_kind')
+    claims = {r['claim_id']: r for r in plan['resume_map']}
+    if any(r not in claims for r in event.get('resume_claim_ids', [])):
+        raise ValueError('unregistered resume claim')
+    projects = {p['id'] for p in plan['projects']}
+    if event.get('project_id') and event['project_id'] not in projects:
+        raise ValueError('unregistered project')
+    if event['evidence_kind'] == 'resume_actual':
+        require_text(event, 'project_id')
+        if not any(claims[r].get('project_id') == event['project_id'] for r in event.get('resume_claim_ids', [])):
+            raise ValueError('actual project question needs a claim anchored to that project')
+    if event.get('parent_id'):
+        parent = next(q for q in state['questions'] if q['id'] == event['parent_id'])
+        if not parent['assessment']:
+            raise ValueError('assess the parent before choosing a follow-up')
+    audit = selection_audit(state)
+    reserve_other = sum(t['reserve_minutes'] for t in audit['topics'] if t['required'] and not t['sampled'] and t['id'] != event['topic_id'])
+    expected = event.get('expected_answer_minutes')
+    if not positive(expected):
+        raise ValueError('question requires positive expected_answer_minutes including questioning overhead')
+    if expected + reserve_other > plan['duration_minutes'] - elapsed + 0.001:
+        raise ValueError('question would consume protected sampling time; select an unsampled priority or shorten/replan honestly')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='command', required=True)
     p = sub.add_parser('init'); p.add_argument('--dir', required=True); p.add_argument('--plan', required=True)
     p = sub.add_parser('append'); p.add_argument('--dir', required=True); p.add_argument('--event', required=True)
+    p = sub.add_parser('check'); p.add_argument('--dir', required=True)
     p = sub.add_parser('show'); p.add_argument('--dir', required=True)
     p = sub.add_parser('report'); p.add_argument('--dir', required=True); p.add_argument('--review', required=True)
     args = parser.parse_args()
@@ -291,6 +427,8 @@ def main():
                     save_json(folder / 'review.json', review)
                     atomic(folder / 'report.md', body)
                     result = {'report': str(folder / 'report.md'), 'questions_reviewed': len(answers)}
+                elif args.command == 'check':
+                    result = {'remaining_minutes': state['remaining_minutes'], **state['selection_audit']}
                 else:
                     result = update(folder, plan, events)  # Rebuild stale snapshots.
         if args.command in ('init', 'append'):
