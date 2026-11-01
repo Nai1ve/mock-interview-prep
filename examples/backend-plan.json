@@ -1,0 +1,85 @@
+{
+  "schema_version": 2,
+  "role": "Full-stack engineer",
+  "stage": "technical",
+  "duration_minutes": 30,
+  "timing_mode": "active_estimate",
+  "timing_basis": "Estimated active time",
+  "practice_scope": {
+    "objective": "Today practise backend",
+    "included_domains": [
+      "backend",
+      "database",
+      "cache"
+    ],
+    "excluded_domains": [
+      "frontend"
+    ]
+  },
+  "preparation_research": "Example only: perform model-native research on relevant version-sensitive mechanisms, or record why unavailable before use.",
+  "modules": [
+    {
+      "id": "core",
+      "name": "Backend assessment",
+      "minutes": 30,
+      "domains": [
+        "backend",
+        "database",
+        "cache"
+      ]
+    }
+  ],
+  "projects": [
+    {
+      "id": "P1",
+      "name": "Data scheduler",
+      "priority": "critical"
+    },
+    {
+      "id": "P2",
+      "name": "Agent service",
+      "priority": "critical"
+    }
+  ],
+  "resume_map": [
+    {
+      "claim_id": "R1",
+      "project_id": "P1",
+      "resume_evidence": "Owned scheduler recovery"
+    },
+    {
+      "claim_id": "R2",
+      "project_id": "P2",
+      "resume_evidence": "Owned execution state"
+    }
+  ],
+  "topics": [
+    {
+      "id": "recovery",
+      "name": "Recovery coordination",
+      "domain": "backend",
+      "basis": "R1 actual responsibility",
+      "required": true,
+      "reserve_minutes": 4,
+      "target_depth": "boundary"
+    },
+    {
+      "id": "index",
+      "name": "Index access path",
+      "domain": "database",
+      "basis": "JD query tuning",
+      "required": true,
+      "reserve_minutes": 4,
+      "target_depth": "mechanism"
+    },
+    {
+      "id": "lock",
+      "name": "Redis lock ownership",
+      "domain": "cache",
+      "basis": "User requested lock drill",
+      "required": true,
+      "reserve_minutes": 4,
+      "target_depth": "boundary"
+    }
+  ]
+}
